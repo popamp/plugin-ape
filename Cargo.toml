@@ -1,0 +1,25 @@
+[package]
+name = "popamp-plugin-ape"
+description = "Monkey's Audio (.ape) for Popamp"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.89"
+authors = ["Gunyakov <web@gunyakov.pro>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/popamp/plugin-ape"
+publish = false
+
+[lib]
+# cdylib is the plug-in; rlib lets `cargo test` run its logic natively.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+ape-decoder = "0.3"
+extism-pdk = "1.4"
+popamp-plugin-api = { git = "https://github.com/popamp/popamp-plugin-api", branch = "main" }
+
+[profile.release]
+# It decodes while the track plays: fast beats small.
+opt-level = 3
+lto = true
+strip = true

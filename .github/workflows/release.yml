@@ -1,0 +1,20 @@
+name: Release
+
+# A tag v<version> publishes the .deb in its release and adds it to
+# https://apt.popamp.app; a manual run only builds it (run artifact).
+# The work is done by popamp/apt's addon-release workflow.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: popamp/apt/.github/workflows/addon-release.yml@main
+    with:
+      # Decoder plug-ins came with 0.9.0.
+      min-popamp: "0.9.0"
+    secrets: inherit

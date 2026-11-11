@@ -1,0 +1,9 @@
+id = "ape"
+name = "Monkey's Audio"
+version = "1.0.0"
+api = "1.1"
+kind = "decoder"
+description = "Plays Monkey's Audio (.ape) files, lossless."
+
+[decoder]
+extensions = ["ape"]
