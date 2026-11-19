@@ -26,23 +26,26 @@ impl<F: FnMut(u64, u32) -> Result<Vec<u8>, String>> Input<F> {
     }
 }
 
+/// A read fills the whole buffer unless the file ends first: the decoder
+/// reads a frame with one `read`, and a frame may go on past a piece.
 impl<F: FnMut(u64, u32) -> Result<Vec<u8>, String>> Read for Input<F> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if buf.is_empty() || self.pos >= self.size {
-            return Ok(0);
-        }
-        if !self.in_piece() {
-            self.piece = (self.fetch)(self.pos, PIECE).map_err(io::Error::other)?;
-            self.piece_at = self.pos;
-            if self.piece.is_empty() {
-                return Ok(0);
+        let mut done = 0;
+        while done < buf.len() && self.pos < self.size {
+            if !self.in_piece() {
+                self.piece = (self.fetch)(self.pos, PIECE).map_err(io::Error::other)?;
+                self.piece_at = self.pos;
+                if self.piece.is_empty() {
+                    break;
+                }
             }
+            let from = (self.pos - self.piece_at) as usize;
+            let n = (buf.len() - done).min(self.piece.len() - from);
+            buf[done..done + n].copy_from_slice(&self.piece[from..from + n]);
+            self.pos += n as u64;
+            done += n;
         }
-        let from = (self.pos - self.piece_at) as usize;
-        let n = buf.len().min(self.piece.len() - from);
-        buf[..n].copy_from_slice(&self.piece[from..from + n]);
-        self.pos += n as u64;
-        Ok(n)
+        Ok(done)
     }
 }
 
@@ -85,5 +88,22 @@ mod tests {
         assert!(input.seek(SeekFrom::Current(-700_000)).is_err());
         drop(input);
         assert_eq!(calls, 4, "one call per piece: the head, the tail, then two from the middle");
+    }
+
+    #[test]
+    fn one_read_fills_the_buffer_across_pieces() {
+        // The decoder reads a frame with one `read`, and a frame may cross a piece.
+        let bytes: Vec<u8> = (0..600_000u32).map(|i| (i % 251) as u8).collect();
+        let mut input =
+            Input::new(bytes.len() as u64, |at, len| Ok(bytes[at as usize..(at as usize + len as usize).min(bytes.len())].to_vec()));
+        input.read_exact(&mut [0u8; 10]).unwrap();
+        // The piece read holds bytes 0..262 144; the frame goes on past it.
+        input.seek(SeekFrom::Start(200_000)).unwrap();
+        let mut frame = vec![0u8; 100_000];
+        assert_eq!(input.read(&mut frame).unwrap(), 100_000);
+        assert_eq!(frame, bytes[200_000..300_000]);
+        let mut past_end = vec![0u8; 10];
+        input.seek(SeekFrom::Start(599_996)).unwrap();
+        assert_eq!(input.read(&mut past_end).unwrap(), 4);
     }
 }
